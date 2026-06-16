@@ -126,4 +126,3 @@ def UPP_protocol_mlquantify(X, y, batch_size=100, n_prevalences=1100, repeats=1,
         batches.append((batch, prevalence))
 
     return batches
-    return batches
