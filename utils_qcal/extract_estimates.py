@@ -8,10 +8,10 @@ from sklearn.calibration import CalibratedClassifierCV
 import pandas as pd
 import numpy as np
 from scipy.stats import entropy
-from utils.utils_calibration import *
+from utils_qcal.calibrator_classifier import *
 import pdb
 
-def pre_treined_model(X_train, y_train, clf=None, calibration: bool = False):
+def pre_treined_model(X_train, y_train, clf=None, method=None, calibration: bool = False):
     '''
     This function takes a training set and returns a trained classifier.
 
@@ -21,27 +21,46 @@ def pre_treined_model(X_train, y_train, clf=None, calibration: bool = False):
     - X_train: Training dataset;
     - y_train: Labels of the training dataset;
     - clf: Classifier to be trained. Default is *RandomForestClassifier*.
-    - *calibration (bool)*: if True, applies probability calibration
+    - *calibration (bool)*: if True, applies probability calibration.
+    - *method (str)*: the calibration method to use. One of 'BCTS',
+      'platt_scaling' or 'isotonic'. Default is 'BCTS'.
 
     ----------
     Returns:
     ----------
-    - If *calibration* is True: calibrated classifier
-    - If *calibration* is False: trained classifier
+    - If *calibration* is True: calibrated classifier.
+    - If *calibration* is False: trained classifier.
+
+    ----------
+    Raises:
+    ----------
+    - ValueError: if calibration is requested and *method* is not one of
+      'BCTS', 'platt_scaling' or 'isotonic'.
     '''
     if clf is None:
         model_for_scores = RandomForestClassifier(random_state=42, n_jobs=1)
     else:
         model_for_scores = clf
 
-    if calibration:
-        calibrated_clf = BCTSCalibratedClassifierCV(estimator=model_for_scores, cv=5)
+    if calibration or method is not None:
+        # default to 'BCTS' when calibration is requested without a method
+        if method is None:
+            method = 'BCTS'
+
+        if method == 'BCTS':
+            calibrated_clf = BCTSCalibratedClassifierCV(estimator=model_for_scores, cv=5)
+        elif method == 'platt_scaling':
+            calibrated_clf = CalibratedClassifierCV(estimator=model_for_scores, cv=5, method='sigmoid')
+        elif method == 'isotonic':
+            calibrated_clf = CalibratedClassifierCV(estimator=model_for_scores, cv=5, method='isotonic')
+        else:
+            raise ValueError(f"Unknown calibration method: {method!r}")
+
         calibrated_clf.fit(X_train, y_train)
         return calibrated_clf
     else:
         model_for_scores.fit(X_train, y_train)
         return model_for_scores
-    
 
 
 
@@ -143,3 +162,118 @@ def extract_cc_estimates_from_test(batch_test, model_trained):
     cc_estimates_test = np.array(cc_estimates_test).reshape(1, -1)
 
     return cc_estimates_test
+
+
+
+
+
+def extract_cc_estimates_from_train_mlq(X_train, y_train, subgroups, model_clf):
+    '''
+    Computes the Classify and Count (CC) prevalence estimates over the training subgroups
+    (flat version used by MLQ; also returns the trained CC quantifier).
+
+    For each subgroup produced by the APP protocol, the CC quantifier estimates the class
+    prevalences. The estimates are returned as a flat list (one [class_0, class_1] pair per
+    subgroup), together with the subgroups' true prevalences and the trained CC quantifier.
+
+    Parameters:
+    ---
+    - X_train: Training dataset;
+    - y_train: Labels of the training dataset;
+    - subgroups: List of tuples, where each tuple contains a batch and the true class proportions in that batch;
+    - model_clf: Base classifier used by the CC quantifier.
+
+    Returns:
+    ----
+    - cc_estimates: List of CC prevalence estimates, one [class_0, class_1] pair per subgroup;
+    - true_prevalences: List of true proportions for each subgroup;
+    - trained_models_land: Dictionary with the trained CC quantifier (key '0').
+    '''
+    models_land = {
+        '0': CC
+    }
+
+    trained_models_land = {}
+    # Training the CC quantifier used to produce the estimates
+    for name, model_class in models_land.items():
+        model = model_class(learner=model_clf)
+        model.fit(X_train, y_train)
+        trained_models_land[name] = model
+
+    true_prevalences = []
+    cc_estimates = []
+
+    # Computing the CC estimates for each training subgroup
+    for sub_x, proportions_real in subgroups:
+        sub_x = pd.DataFrame(sub_x).drop(columns=['target'])
+        # CC prevalence estimate for the subgroup
+        for name, model in trained_models_land.items():
+            if name == '0':
+                pred_sub = model.predict(sub_x)
+                # always ensures two classes (0 and 1)
+                pred_sub = [
+                    pred_sub.get(0, np.float64(0.0)),
+                    pred_sub.get(1, np.float64(0.0))
+                ]
+            cc_estimates.append(pred_sub)
+
+        true_prevalences.append(proportions_real)
+
+    return cc_estimates, true_prevalences, trained_models_land
+
+
+
+
+def extract_cc_estimates_from_train_iso(X_train, y_train, subgroups, model_clf):
+    '''
+    Computes the Classify and Count (CC) prevalence estimates over the training subgroups
+    (flat version used by ISO; also returns the trained CC quantifier).
+
+    For each subgroup produced by the protocol, the CC quantifier estimates the class
+    prevalences. The estimates are returned as a flat list (one [class_1] per
+    subgroup), together with the subgroups' true prevalences and the trained CC quantifier.
+
+    Parameters:
+    ---
+    - X_train: Training dataset;
+    - y_train: Labels of the training dataset;
+    - subgroups: List of tuples, where each tuple contains a batch and the true class proportions in that batch;
+    - model_clf: Base classifier used by the CC quantifier.
+
+    Returns:
+    ----
+    - cc_estimates: List of CC prevalence estimates, one [class_1] per subgroup;
+    - true_prevalences: List of true proportions for each subgroup;
+    - trained_models_land: Dictionary with the trained CC quantifier (key '0').
+    '''
+    models_land = {
+        '0': CC
+    }
+
+    trained_models_land = {}
+    # Training the CC quantifier used to produce the estimates
+    for name, model_class in models_land.items():
+        model = model_class(learner=model_clf)
+        model.fit(X_train, y_train)
+        trained_models_land[name] = model
+
+    true_prevalences = []
+    cc_estimates = []
+
+    # Computing the CC estimates for each training subgroup
+    for sub_x, proportions_real in subgroups:
+        sub_x = pd.DataFrame(sub_x).drop(columns=['target'])
+        # CC prevalence estimate for the subgroup
+        for name, model in trained_models_land.items():
+            if name == '0':
+                pred_sub = model.predict(sub_x)
+                # always ensures two classes (0 and 1)
+                pred_sub = [
+                    pred_sub.get(0, np.float64(0.0)),
+                    pred_sub.get(1, np.float64(0.0))
+                ]
+            cc_estimates.append(pred_sub[1]) # only the prevalence of class 1 is needed for the regression
+
+        true_prevalences.append(proportions_real[1]) # only the prevalence of class 1 is needed for the regression
+
+    return cc_estimates, true_prevalences, trained_models_land
