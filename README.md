@@ -11,13 +11,12 @@ space.
 
 ## Repository structure
 
-<!-- conferir: ajuste os nomes/caminhos abaixo para os do seu repositório real -->
 
 ```
 .
 ├── README.md                     # this file
 ├── requirements.txt              # Python dependencies
-├── exp_calibradores_part_6.py    # main experiment pipeline (106 datasets)
+├── run_experiment.py             # main experiment pipeline (106 datasets)
 ├── generate_mae_table.py         # regenerates the LaTeX MAE table from the paper
 ├── generate_readme_results.py    # regenerates the supplementary results below
 ├── RESULTS.md                    # per-dataset median MAE table (106 × 13)
@@ -29,7 +28,6 @@ space.
 
 ## Requirements
 
-<!-- conferir: versões reais usadas no servidor -->
 
 - Python 3.x
 - `numpy`, `pandas`, `scikit-learn`, `mlquantify`, `scikit-posthocs`, `scipy`
@@ -46,7 +44,6 @@ The pipeline evaluates the Classify-and-Count (CC) baselines and the QuantCal
 variants across **106 binary datasets** under the Artificial Prevalence Protocol
 (APP), with 30 splits per dataset.
 
-<!-- conferir: comando e flags reais -->
 
 ```bash
 nohup python run_experiment.py > log.out 2>&1 &
@@ -113,4 +110,5 @@ python generate_readme_results.py medianas_methods_all_exp_part4.csv
 
 ## License
 
-<!-- conferir: licença do artefato -->
+
+Released under the MIT License. See [`LICENSE`](LICENSE) for the full text.
