@@ -5,7 +5,7 @@ from sklearn.svm import LinearSVR
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 import numpy as np
-from utils_qcal.app_protocol import *
+from utils_qcal.protocol import *
 from utils_qcal.calibrator_classifier import *
 from utils_qcal.extract_estimates import *
 
