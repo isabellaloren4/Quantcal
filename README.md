@@ -49,7 +49,7 @@ variants across **106 binary datasets** under the Artificial Prevalence Protocol
 <!-- conferir: comando e flags reais -->
 
 ```bash
-python exp_calibradores_part_6.py
+nohup python run_experiment.py > log.out 2>&1 &
 ```
 
 Per-split results are written to `results/`. The median over splits for each
