@@ -283,7 +283,7 @@ class QCal_knn_3_upp(AggregationMixin, BaseQuantifier):
         for i in range(self.n_validation):
             # Creating validation set
             X_tr, X_val, y_tr, y_val = train_test_split(
-                X_train, y_train, test_size=0.4, stratify=y_train
+                X_train, y_train, test_size=0.3, stratify=y_train
             )
             model_clf = pre_treined_model(X_tr, y_tr)
 
