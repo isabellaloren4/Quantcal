@@ -17,11 +17,8 @@ space.
 ├── README.md                     # this file
 ├── requirements.txt              # Python dependencies
 ├── run_experiment.py             # main experiment pipeline (106 datasets)
-├── generate_mae_table.py         # regenerates the LaTeX MAE table from the paper
-├── generate_readme_results.py    # regenerates the supplementary results below
 ├── RESULTS.md                    # per-dataset median MAE table (106 × 13)
 ├── medianas_methods_all_exp_part4.csv   # median MAE per dataset and method
-└── results/                      # raw per-split CSV outputs
 ```
 
 ---
