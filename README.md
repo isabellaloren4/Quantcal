@@ -43,7 +43,7 @@ variants across **106 binary datasets** under the Artificial Prevalence Protocol
 
 
 ```bash
-nohup python run_experiment.py > log.out 2>&1 &
+nohup python3 -u run_experiment.py > log.out 2>&1 &
 ```
 
 Per-split results are written to `results/`. The median over splits for each
