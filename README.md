@@ -63,16 +63,6 @@ points.
 
 ---
 
-## Reproducing the paper's MAE table
-
-```bash
-python generate_mae_table.py
-```
-
-This regenerates the LaTeX `longtable` reported in the paper.
-
----
-
 ## Supplementary results
 
 These per-dataset results were omitted from the paper for space. They cover the
