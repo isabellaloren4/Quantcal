@@ -25,11 +25,13 @@ class QCal_knn_3(AggregationMixin, BaseQuantifier):
     - Median of CC estimates computed for each proportion
     - n_validation = 3 (number of validations for the median computation)
     '''
-    def __init__(self, learner, *, n_validation=3, name_data=None):
+    def __init__(self, learner, *, n_validation=3, prevalences=None, repeats=None, name_data=None):
         self.learner = learner
         self.regressor = KNeighborsRegressor(n_neighbors=1)
         self.quantifier = None
         self.n_validation = n_validation
+        self.prevalences = prevalences
+        self.repeats = repeats
         self.name_data = name_data
         self.subgroups_train = None
         self.subgroups_train_all = None
@@ -49,8 +51,21 @@ class QCal_knn_3(AggregationMixin, BaseQuantifier):
             )
             model_clf = pre_treined_model(X_tr, y_tr)
 
-            # Generating subgroups
-            self.subgroups_train = APP_protocol_mlquantify(X_val, y_val)
+            # Generating subgroups. `n_prevalences`/`repeats` are only
+            # forwarded when explicitly set (both None -> APP_protocol_
+            # mlquantify's own defaults: n_prevalences=11, repeats=100, i.e.
+            # ~1100 batches). Total batches per call = n_prevalences *
+            # repeats, so bumping n_prevalences way up (e.g. to 100) WITHOUT
+            # also overriding repeats keeps the wrapper's repeats=100
+            # default and silently multiplies out to 10000+ batches per
+            # validation iteration -- pass repeats explicitly whenever
+            # prevalences is scaled up, to keep the total batch count sane.
+            app_kwargs = {}
+            if self.prevalences is not None:
+                app_kwargs['n_prevalences'] = self.prevalences
+            if self.repeats is not None:
+                app_kwargs['repeats'] = self.repeats
+            self.subgroups_train = APP_protocol_mlquantify(X_val, y_val, **app_kwargs)
 
             # Computing the CC estimates for each subgroup
             true_prevalences, predictions_for_proportion_class_0, predictions_for_proportion_class_1 = \
@@ -85,7 +100,7 @@ class QCal_knn_3(AggregationMixin, BaseQuantifier):
 
     def predict(self, X_test):
         # Quantifier prediction
-        predict_quantifier = extract_cc_estimates_from_test(
+        predict_quantifier = extract_estimates_from_test(
             X_test, self.quantifier
         )
         # Correction method prediction
@@ -104,11 +119,12 @@ class QCal_knn_5(AggregationMixin, BaseQuantifier):
     - Median of CC estimates computed for each proportion
     - n_validation = 5 (number of validations for the median computation)
     '''
-    def __init__(self, learner, *, n_validation=5, name_data=None):
+    def __init__(self, learner, *, n_validation=5, prevalences=None,name_data=None):
         self.learner = learner
         self.regressor = KNeighborsRegressor(n_neighbors=1)
         self.quantifier = None
         self.n_validation = n_validation
+        self.prevalences = prevalences
         self.name_data = name_data
         self.subgroups_train = None
         self.subgroups_train_all = None
@@ -128,8 +144,13 @@ class QCal_knn_5(AggregationMixin, BaseQuantifier):
             )
             model_clf = pre_treined_model(X_tr, y_tr)
 
-            # Generating subgroups
-            self.subgroups_train = APP_protocol_mlquantify(X_val, y_val)
+            # Generating subgroups. `n_prevalences` is only forwarded when
+            # explicitly set: APP_protocol_mlquantify's own default (11) is
+            # int/float, but mlquantify's APP no longer accepts an explicit
+            # n_prevalences=None (it raises ValueError), so self.prevalences
+            # staying at its own default of None must NOT be passed through.
+            app_kwargs = {} if self.prevalences is None else {'n_prevalences': self.prevalences}
+            self.subgroups_train = APP_protocol_mlquantify(X_val, y_val, **app_kwargs)
 
             # Computing the CC estimates for each subgroup
             true_prevalences, predictions_for_proportion_class_0, predictions_for_proportion_class_1 = \
@@ -164,7 +185,7 @@ class QCal_knn_5(AggregationMixin, BaseQuantifier):
 
     def predict(self, X_test):
         # Quantifier prediction
-        predict_quantifier = extract_cc_estimates_from_test(
+        predict_quantifier = extract_estimates_from_test(
             X_test, self.quantifier
         )
         # Correction method prediction
@@ -183,11 +204,12 @@ class QCal_knn_10(AggregationMixin, BaseQuantifier):
     - Median of CC estimates computed for each proportion
     - n_validation = 10 (number of validations for the median computation)
     '''
-    def __init__(self, learner, *, n_validation=10, name_data=None):
+    def __init__(self, learner, *, n_validation=10, prevalences=None,name_data=None):
         self.learner = learner
         self.regressor = KNeighborsRegressor(n_neighbors=1)
         self.quantifier = None
         self.n_validation = n_validation
+        self.prevalences = prevalences
         self.name_data = name_data
         self.subgroups_train = None
         self.subgroups_train_all = None
@@ -207,8 +229,13 @@ class QCal_knn_10(AggregationMixin, BaseQuantifier):
             )
             model_clf = pre_treined_model(X_tr, y_tr)
 
-            # Generating subgroups
-            self.subgroups_train = APP_protocol_mlquantify(X_val, y_val)
+            # Generating subgroups. `n_prevalences` is only forwarded when
+            # explicitly set: APP_protocol_mlquantify's own default (11) is
+            # int/float, but mlquantify's APP no longer accepts an explicit
+            # n_prevalences=None (it raises ValueError), so self.prevalences
+            # staying at its own default of None must NOT be passed through.
+            app_kwargs = {} if self.prevalences is None else {'n_prevalences': self.prevalences}
+            self.subgroups_train = APP_protocol_mlquantify(X_val, y_val, **app_kwargs)
 
             # Computing the CC estimates for each subgroup
             true_prevalences, predictions_for_proportion_class_0, predictions_for_proportion_class_1 = \
@@ -243,7 +270,7 @@ class QCal_knn_10(AggregationMixin, BaseQuantifier):
 
     def predict(self, X_test):
         # Quantifier prediction
-        predict_quantifier = extract_cc_estimates_from_test(
+        predict_quantifier = extract_estimates_from_test(
             X_test, self.quantifier
         )
         # Correction method prediction
@@ -309,7 +336,73 @@ class QCal_knn_3_upp(AggregationMixin, BaseQuantifier):
 
     def predict(self, X_test):
         # Quantifier prediction
-        predict_quantifier = extract_cc_estimates_from_test(
+        predict_quantifier = extract_estimates_from_test(
+            X_test, self.quantifier
+        )
+        # Correction method prediction
+        prevalence = self.regressor.predict(predict_quantifier)
+
+        prevalence = np.clip(prevalence, 0, 1)  # ensure predictions are between 0 and 1
+
+        return prevalence.flatten()
+
+
+
+class QCal_knn_10_upp(AggregationMixin, BaseQuantifier):
+    '''
+    Quantifier calibration method.
+    - KNeighborsRegressor for correction
+    - Random Forest classifier for the quantifier
+    - Median of CC estimates computed for each proportion
+    - n_validation = 10 (number of validations for the median computation)
+    - UPP protocol for the generation of the subgroups in the training phase
+    '''
+    def __init__(self, learner, *, n_validation=10, name_data=None):
+        self.learner = learner
+        self.regressor = KNeighborsRegressor(n_neighbors=1)
+        self.quantifier = None
+        self.n_validation = n_validation
+        self.name_data = name_data
+        self.subgroups_train = None
+        self.subgroups_train_all = None
+
+    def fit(self, X_train, y_train, name_data=None):
+        # if nothing is passed here, use the name saved in the constructor
+        if name_data is None:
+            name_data = self.name_data
+
+        true_prevalences_all = []
+        cc_estimates_all = []
+        for i in range(self.n_validation):
+            # Creating validation set
+            X_tr, X_val, y_tr, y_val = train_test_split(
+                X_train, y_train, test_size=0.3, stratify=y_train
+            )
+            model_clf = pre_treined_model(X_tr, y_tr)
+
+            # Generating subgroups
+            self.subgroups_train = UPP_protocol_mlquantify(X_val, y_val)
+
+            # Computing the CC estimates for each subgroup
+            cc_estimates, true_prevalences, trained_models_land = \
+                extract_cc_estimates_from_train_mlq(
+                    X_tr, y_tr, self.subgroups_train, model_clf=model_clf)
+
+            # Storing the results of each validation
+            cc_estimates_all.extend(cc_estimates)
+
+            # Storing the true proportions of each validation
+            true_prevalences_all.extend(true_prevalences)
+
+        # Fitting the correction regressor on the median CC estimates
+        self.regressor.fit(cc_estimates_all, true_prevalences_all)
+        self.quantifier = CC(learner=self.learner)
+        self.quantifier.fit(X_train, y_train)
+        return self
+
+    def predict(self, X_test):
+        # Quantifier prediction
+        predict_quantifier = extract_estimates_from_test(
             X_test, self.quantifier
         )
         # Correction method prediction

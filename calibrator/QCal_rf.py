@@ -25,11 +25,12 @@ class QCal_rf_3(AggregationMixin, BaseQuantifier):
     - Median of CC estimates computed for each proportion
     - n_validation = 3 (number of validations for the median computation)
     '''
-    def __init__(self, learner, *, n_validation=3, name_data=None):
+    def __init__(self, learner, *, n_validation=3, prevalences=None,name_data=None):
         self.learner = learner
         self.regressor = RandomForestRegressor()
         self.quantifier = None
         self.n_validation = n_validation
+        self.prevalences = prevalences
         self.name_data = name_data
         self.subgroups_train = None
         self.subgroups_train_all = None
@@ -50,7 +51,7 @@ class QCal_rf_3(AggregationMixin, BaseQuantifier):
             model_clf = pre_treined_model(X_tr, y_tr)
 
             # Generating subgroups
-            self.subgroups_train = APP_protocol_mlquantify(X_val, y_val)
+            self.subgroups_train = APP_protocol_mlquantify(X_val, y_val, n_prevalences=self.prevalences)
 
             # Computing the CC estimates for each subgroup
             true_prevalences, predictions_for_proportion_class_0, predictions_for_proportion_class_1 = \
@@ -85,7 +86,7 @@ class QCal_rf_3(AggregationMixin, BaseQuantifier):
 
     def predict(self, X_test):
         # Quantifier prediction
-        predict_quantifier = extract_cc_estimates_from_test(
+        predict_quantifier = extract_estimates_from_test(
             X_test, self.quantifier
         )
         # Correction method prediction
@@ -102,11 +103,12 @@ class QCal_rf_5(AggregationMixin, BaseQuantifier):
     - Median of CC estimates computed for each proportion
     - n_validation = 5 (number of validations for the median computation)
     '''
-    def __init__(self, learner, *, n_validation=5, name_data=None):
+    def __init__(self, learner, *, n_validation=5, prevalences=None,name_data=None):
         self.learner = learner
         self.regressor = RandomForestRegressor()
         self.quantifier = None
         self.n_validation = n_validation
+        self.prevalences = prevalences
         self.name_data = name_data
         self.subgroups_train = None
         self.subgroups_train_all = None
@@ -127,7 +129,7 @@ class QCal_rf_5(AggregationMixin, BaseQuantifier):
             model_clf = pre_treined_model(X_tr, y_tr)
 
             # Generating subgroups
-            self.subgroups_train = APP_protocol_mlquantify(X_val, y_val)
+            self.subgroups_train = APP_protocol_mlquantify(X_val, y_val, n_prevalences=self.prevalences)
 
             # Computing the CC estimates for each subgroup
             true_prevalences, predictions_for_proportion_class_0, predictions_for_proportion_class_1 = \
@@ -162,7 +164,7 @@ class QCal_rf_5(AggregationMixin, BaseQuantifier):
 
     def predict(self, X_test):
         # Quantifier prediction
-        predict_quantifier = extract_cc_estimates_from_test(
+        predict_quantifier = extract_estimates_from_test(
             X_test, self.quantifier
         )
         # Correction method prediction
@@ -179,11 +181,12 @@ class QCal_rf_10(AggregationMixin, BaseQuantifier):
     - Median of CC estimates computed for each proportion
     - n_validation = 10 (number of validations for the median computation)
     '''
-    def __init__(self, learner, *, n_validation=10, name_data=None):
+    def __init__(self, learner, *, n_validation=10, prevalences=None,name_data=None):
         self.learner = learner
         self.regressor = RandomForestRegressor()
         self.quantifier = None
         self.n_validation = n_validation
+        self.prevalences = prevalences
         self.name_data = name_data
         self.subgroups_train = None
         self.subgroups_train_all = None
@@ -204,7 +207,7 @@ class QCal_rf_10(AggregationMixin, BaseQuantifier):
             model_clf = pre_treined_model(X_tr, y_tr)
 
             # Generating subgroups
-            self.subgroups_train = APP_protocol_mlquantify(X_val, y_val)
+            self.subgroups_train = APP_protocol_mlquantify(X_val, y_val, n_prevalences=self.prevalences)
 
             # Computing the CC estimates for each subgroup
             true_prevalences, predictions_for_proportion_class_0, predictions_for_proportion_class_1 = \
@@ -239,7 +242,7 @@ class QCal_rf_10(AggregationMixin, BaseQuantifier):
 
     def predict(self, X_test):
         # Quantifier prediction
-        predict_quantifier = extract_cc_estimates_from_test(
+        predict_quantifier = extract_estimates_from_test(
             X_test, self.quantifier
         )
         # Correction method prediction
@@ -249,7 +252,7 @@ class QCal_rf_10(AggregationMixin, BaseQuantifier):
     
 
 
-class QCal_rf_3_upp(AggregationMixin, BaseQuantifier):
+class QCal_rf_3_cc(AggregationMixin, BaseQuantifier):
     '''
     Quantifier calibration method.
     - Random Forest regressor for correction
@@ -303,10 +306,803 @@ class QCal_rf_3_upp(AggregationMixin, BaseQuantifier):
 
     def predict(self, X_test):
         # Quantifier prediction
-        predict_quantifier = extract_cc_estimates_from_test(
+        predict_quantifier = extract_estimates_from_test(
             X_test, self.quantifier
         )
         # Correction method prediction
         prevalence = self.regressor.predict(predict_quantifier)
 
+        return prevalence.flatten()
+    
+
+
+
+class QCal_rf_10_cc(AggregationMixin, BaseQuantifier):
+    '''
+    Quantifier calibration method.
+    - Random Forest regressor for correction
+    - Random Forest classifier for the quantifier
+    - Median of CC estimates computed for each proportion
+    - n_validation = 10 (number of validations)
+    - UPP protocol for the generation of the subgroups in the training phase
+    '''
+    def __init__(self, learner, *, n_validation=10, name_data=None):
+        self.learner = learner
+        self.regressor = RandomForestRegressor()
+        self.quantifier = None
+        self.n_validation = n_validation
+        self.name_data = name_data
+        self.subgroups_train = None
+        self.subgroups_train_all = None
+
+    def fit(self, X_train, y_train, name_data=None):
+        # if nothing is passed here, use the name saved in the constructor
+        if name_data is None:
+            name_data = self.name_data
+
+        true_prevalences_all = []
+        cc_estimates_all = []
+        for i in range(self.n_validation):
+            # Creating validation set
+            X_tr, X_val, y_tr, y_val = train_test_split(
+                X_train, y_train, test_size=0.3, stratify=y_train
+            )
+            model_clf = pre_treined_model(X_tr, y_tr)
+
+            # Generating subgroups
+            self.subgroups_train = UPP_protocol_mlquantify(X_val, y_val)
+
+            # Computing the CC estimates for each subgroup
+            cc_estimates, true_prevalences, trained_models_land = \
+                extract_cc_estimates_from_train_mlq(
+                    X_tr, y_tr, self.subgroups_train, model_clf=model_clf)
+
+            # Storing the results of each validation
+            cc_estimates_all.extend(cc_estimates)
+
+            # Storing the true proportions of each validation
+            true_prevalences_all.extend(true_prevalences)
+
+        # Fitting the correction regressor on the median CC estimates
+        self.regressor.fit(cc_estimates_all, true_prevalences_all)
+        self.quantifier = CC(learner=self.learner)
+        self.quantifier.fit(X_train, y_train)
+        return self
+
+    def predict(self, X_test):
+        # Quantifier prediction
+        predict_quantifier = extract_estimates_from_test(
+            X_test, self.quantifier
+        )
+        # Correction method prediction
+        prevalence = self.regressor.predict(predict_quantifier)
+
+        return prevalence.flatten()
+    
+
+
+
+class QCal_rf_10_emq(AggregationMixin, BaseQuantifier):
+    '''
+    Quantifier calibration method.
+    - Random Forest regressor for correction
+    - Random Forest classifier for the quantifier
+    - Median of EMQ estimates computed for each proportion
+    - n_validation = 10 (number of validations)
+    - UPP protocol for the generation of the subgroups in the training phase
+    '''
+    def __init__(self, learner, *, n_validation=10, name_data=None):
+        self.learner = learner
+        self.regressor = RandomForestRegressor()
+        self.quantifier = None
+        self.n_validation = n_validation
+        self.name_data = name_data
+        self.subgroups_train = None
+        self.subgroups_train_all = None
+
+    def fit(self, X_train, y_train, name_data=None):
+        # if nothing is passed here, use the name saved in the constructor
+        if name_data is None:
+            name_data = self.name_data
+
+        true_prevalences_all = []
+        cc_estimates_all = []
+        for i in range(self.n_validation):
+            # Creating validation set
+            X_tr, X_val, y_tr, y_val = train_test_split(
+                X_train, y_train, test_size=0.3, stratify=y_train
+            )
+            model_clf = pre_treined_model(X_tr, y_tr)
+
+            # Generating subgroups
+            self.subgroups_train = UPP_protocol_mlquantify(X_val, y_val)
+
+            # Computing the CC estimates for each subgroup
+            cc_estimates, true_prevalences = \
+                extract_emq_estimates_from_train(
+                    X_tr, y_tr, self.subgroups_train, model_clf=model_clf)
+
+            # Storing the results of each validation
+            cc_estimates_all.extend(cc_estimates)
+
+            # Storing the true proportions of each validation
+            true_prevalences_all.extend(true_prevalences)
+
+        # Fitting the correction regressor on the median CC estimates
+        self.regressor.fit(cc_estimates_all, true_prevalences_all)
+        self.quantifier = EMQ(learner=self.learner)
+        self.quantifier.fit(X_train, y_train)
+        return self
+
+    def predict(self, X_test):
+        # Quantifier prediction
+        predict_quantifier = extract_estimates_from_test(
+            X_test, self.quantifier
+        )
+        # Correction method prediction
+        prevalence = self.regressor.predict(predict_quantifier)
+
+        return prevalence.flatten()
+
+
+class QCal_rf_10_ac(AggregationMixin, BaseQuantifier):
+    '''
+    Quantifier calibration method.
+    - Random Forest regressor for correction
+    - Random Forest classifier for the quantifier
+    - AC estimates computed for each proportion
+    - n_validation = 10 (number of validations)
+    - UPP protocol for the generation of the subgroups in the training phase
+    '''
+    def __init__(self, learner, *, n_validation=10, name_data=None):
+        self.learner = learner
+        self.regressor = RandomForestRegressor()
+        self.quantifier = None
+        self.n_validation = n_validation
+        self.name_data = name_data
+        self.subgroups_train = None
+        self.subgroups_train_all = None
+
+    def fit(self, X_train, y_train, name_data=None):
+        if name_data is None:
+            name_data = self.name_data
+
+        true_prevalences_all = []
+        ac_estimates_all = []
+        for i in range(self.n_validation):
+            X_tr, X_val, y_tr, y_val = train_test_split(
+                X_train, y_train, test_size=0.3, stratify=y_train
+            )
+            model_clf = pre_treined_model(X_tr, y_tr)
+            self.subgroups_train = UPP_protocol_mlquantify(X_val, y_val)
+
+            ac_estimates, true_prevalences, _ = \
+                extract_ac_estimates_from_train(
+                    X_tr, y_tr, self.subgroups_train, model_clf=model_clf)
+
+            ac_estimates_all.extend(ac_estimates)
+            true_prevalences_all.extend(true_prevalences)
+
+        self.regressor.fit(ac_estimates_all, true_prevalences_all)
+        self.quantifier = AC(learner=self.learner)
+        self.quantifier.fit(X_train, y_train)
+        return self
+
+    def predict(self, X_test):
+        predict_quantifier = extract_estimates_from_test(
+            X_test, self.quantifier
+        )
+        prevalence = self.regressor.predict(predict_quantifier)
+        return prevalence.flatten()
+
+
+class QCal_rf_10_pac(AggregationMixin, BaseQuantifier):
+    '''
+    Quantifier calibration method.
+    - Random Forest regressor for correction
+    - Random Forest classifier for the quantifier
+    - PAC estimates computed for each proportion
+    - n_validation = 10 (number of validations)
+    - UPP protocol for the generation of the subgroups in the training phase
+    '''
+    def __init__(self, learner, *, n_validation=10, name_data=None):
+        self.learner = learner
+        self.regressor = RandomForestRegressor()
+        self.quantifier = None
+        self.n_validation = n_validation
+        self.name_data = name_data
+        self.subgroups_train = None
+        self.subgroups_train_all = None
+
+    def fit(self, X_train, y_train, name_data=None):
+        if name_data is None:
+            name_data = self.name_data
+
+        true_prevalences_all = []
+        pac_estimates_all = []
+        for i in range(self.n_validation):
+            X_tr, X_val, y_tr, y_val = train_test_split(
+                X_train, y_train, test_size=0.3, stratify=y_train
+            )
+            model_clf = pre_treined_model(X_tr, y_tr)
+            self.subgroups_train = UPP_protocol_mlquantify(X_val, y_val)
+
+            pac_estimates, true_prevalences, _ = \
+                extract_pac_estimates_from_train(
+                    X_tr, y_tr, self.subgroups_train, model_clf=model_clf)
+
+            pac_estimates_all.extend(pac_estimates)
+            true_prevalences_all.extend(true_prevalences)
+
+        self.regressor.fit(pac_estimates_all, true_prevalences_all)
+        self.quantifier = PAC(learner=self.learner)
+        self.quantifier.fit(X_train, y_train)
+        return self
+
+    def predict(self, X_test):
+        predict_quantifier = extract_estimates_from_test(
+            X_test, self.quantifier
+        )
+        prevalence = self.regressor.predict(predict_quantifier)
+        return prevalence.flatten()
+
+
+class QCal_rf_10_fm(AggregationMixin, BaseQuantifier):
+    '''
+    Quantifier calibration method.
+    - Random Forest regressor for correction
+    - Random Forest classifier for the quantifier
+    - FM estimates computed for each proportion
+    - n_validation = 10 (number of validations)
+    - UPP protocol for the generation of the subgroups in the training phase
+    '''
+    def __init__(self, learner, *, n_validation=10, name_data=None):
+        self.learner = learner
+        self.regressor = RandomForestRegressor()
+        self.quantifier = None
+        self.n_validation = n_validation
+        self.name_data = name_data
+        self.subgroups_train = None
+        self.subgroups_train_all = None
+
+    def fit(self, X_train, y_train, name_data=None):
+        if name_data is None:
+            name_data = self.name_data
+
+        true_prevalences_all = []
+        fm_estimates_all = []
+        for i in range(self.n_validation):
+            X_tr, X_val, y_tr, y_val = train_test_split(
+                X_train, y_train, test_size=0.3, stratify=y_train
+            )
+            model_clf = pre_treined_model(X_tr, y_tr)
+            self.subgroups_train = UPP_protocol_mlquantify(X_val, y_val)
+
+            fm_estimates, true_prevalences, _ = \
+                extract_fm_estimates_from_train(
+                    X_tr, y_tr, self.subgroups_train, model_clf=model_clf)
+
+            fm_estimates_all.extend(fm_estimates)
+            true_prevalences_all.extend(true_prevalences)
+
+        self.regressor.fit(fm_estimates_all, true_prevalences_all)
+        self.quantifier = FM(learner=self.learner)
+        self.quantifier.fit(X_train, y_train)
+        return self
+
+    def predict(self, X_test):
+        predict_quantifier = extract_estimates_from_test(
+            X_test, self.quantifier
+        )
+        prevalence = self.regressor.predict(predict_quantifier)
+        return prevalence.flatten()
+
+
+class QCal_rf_10_kdeyml(AggregationMixin, BaseQuantifier):
+    '''
+    Quantifier calibration method.
+    - Random Forest regressor for correction
+    - Random Forest classifier for the quantifier
+    - KDEyML estimates computed for each proportion
+    - n_validation = 10 (number of validations)
+    - UPP protocol for the generation of the subgroups in the training phase
+    '''
+    def __init__(self, learner, *, n_validation=10, name_data=None):
+        self.learner = learner
+        self.regressor = RandomForestRegressor()
+        self.quantifier = None
+        self.n_validation = n_validation
+        self.name_data = name_data
+        self.subgroups_train = None
+        self.subgroups_train_all = None
+
+    def fit(self, X_train, y_train, name_data=None):
+        if name_data is None:
+            name_data = self.name_data
+
+        true_prevalences_all = []
+        kdeyml_estimates_all = []
+        for i in range(self.n_validation):
+            X_tr, X_val, y_tr, y_val = train_test_split(
+                X_train, y_train, test_size=0.3, stratify=y_train
+            )
+            model_clf = pre_treined_model(X_tr, y_tr)
+            self.subgroups_train = UPP_protocol_mlquantify(X_val, y_val)
+
+            kdeyml_estimates, true_prevalences, _ = \
+                extract_kdeyml_estimates_from_train(
+                    X_tr, y_tr, self.subgroups_train, model_clf=model_clf)
+
+            kdeyml_estimates_all.extend(kdeyml_estimates)
+            true_prevalences_all.extend(true_prevalences)
+
+        self.regressor.fit(kdeyml_estimates_all, true_prevalences_all)
+        self.quantifier = KDEyML(classifier=self.learner, fit_classifier=True)
+        self.quantifier.fit(X_train, y_train)
+        return self
+
+    def predict(self, X_test):
+        predict_quantifier = extract_estimates_from_test(
+            X_test, self.quantifier
+        )
+        prevalence = self.regressor.predict(predict_quantifier)
+        return prevalence.flatten()
+
+
+class QCal_rf_10_dys(AggregationMixin, BaseQuantifier):
+    '''
+    Quantifier calibration method.
+    - Random Forest regressor for correction
+    - Random Forest classifier for the quantifier
+    - DyS estimates computed for each proportion
+    - n_validation = 10 (number of validations)
+    - UPP protocol for the generation of the subgroups in the training phase
+    '''
+    def __init__(self, learner, *, n_validation=10, name_data=None):
+        self.learner = learner
+        self.regressor = RandomForestRegressor()
+        self.quantifier = None
+        self.n_validation = n_validation
+        self.name_data = name_data
+        self.subgroups_train = None
+        self.subgroups_train_all = None
+
+    def fit(self, X_train, y_train, name_data=None):
+        if name_data is None:
+            name_data = self.name_data
+
+        true_prevalences_all = []
+        dys_estimates_all = []
+        for i in range(self.n_validation):
+            X_tr, X_val, y_tr, y_val = train_test_split(
+                X_train, y_train, test_size=0.3, stratify=y_train
+            )
+            model_clf = pre_treined_model(X_tr, y_tr)
+            self.subgroups_train = UPP_protocol_mlquantify(X_val, y_val)
+
+            dys_estimates, true_prevalences, _ = \
+                extract_dys_estimates_from_train(
+                    X_tr, y_tr, self.subgroups_train, model_clf=model_clf)
+
+            dys_estimates_all.extend(dys_estimates)
+            true_prevalences_all.extend(true_prevalences)
+
+        self.regressor.fit(dys_estimates_all, true_prevalences_all)
+        self.quantifier = DyS(learner=self.learner)
+        self.quantifier.fit(X_train, y_train)
+        return self
+
+    def predict(self, X_test):
+        predict_quantifier = extract_estimates_from_test(
+            X_test, self.quantifier
+        )
+        prevalence = self.regressor.predict(predict_quantifier)
+        return prevalence.flatten()
+
+
+class QCal_rf_10_ms(AggregationMixin, BaseQuantifier):
+    '''
+    Quantifier calibration method.
+    - Random Forest regressor for correction
+    - Random Forest classifier for the quantifier
+    - MS estimates computed for each proportion
+    - n_validation = 10 (number of validations)
+    - UPP protocol for the generation of the subgroups in the training phase
+    '''
+    def __init__(self, learner, *, n_validation=10, name_data=None):
+        self.learner = learner
+        self.regressor = RandomForestRegressor()
+        self.quantifier = None
+        self.n_validation = n_validation
+        self.name_data = name_data
+        self.subgroups_train = None
+        self.subgroups_train_all = None
+
+    def fit(self, X_train, y_train, name_data=None):
+        if name_data is None:
+            name_data = self.name_data
+
+        true_prevalences_all = []
+        ms_estimates_all = []
+        for i in range(self.n_validation):
+            X_tr, X_val, y_tr, y_val = train_test_split(
+                X_train, y_train, test_size=0.3, stratify=y_train
+            )
+            model_clf = pre_treined_model(X_tr, y_tr)
+            self.subgroups_train = UPP_protocol_mlquantify(X_val, y_val)
+
+            ms_estimates, true_prevalences, _ = \
+                extract_ms_estimates_from_train(
+                    X_tr, y_tr, self.subgroups_train, model_clf=model_clf)
+
+            ms_estimates_all.extend(ms_estimates)
+            true_prevalences_all.extend(true_prevalences)
+
+        self.regressor.fit(ms_estimates_all, true_prevalences_all)
+        self.quantifier = MS(learner=self.learner)
+        self.quantifier.fit(X_train, y_train)
+        return self
+
+    def predict(self, X_test):
+        predict_quantifier = extract_estimates_from_test(
+            X_test, self.quantifier
+        )
+        prevalence = self.regressor.predict(predict_quantifier)
+        return prevalence.flatten()
+
+
+class QCal_rf_3_emq(AggregationMixin, BaseQuantifier):
+    '''
+    Quantifier calibration method.
+    - Random Forest regressor for correction
+    - Random Forest classifier for the quantifier
+    - EMQ estimates computed for each proportion
+    - n_validation = 3 (number of validations)
+    - UPP protocol for the generation of the subgroups in the training phase
+    '''
+    def __init__(self, learner, *, n_validation=3, name_data=None):
+        self.learner = learner
+        self.regressor = RandomForestRegressor()
+        self.quantifier = None
+        self.n_validation = n_validation
+        self.name_data = name_data
+        self.subgroups_train = None
+        self.subgroups_train_all = None
+
+    def fit(self, X_train, y_train, name_data=None):
+        if name_data is None:
+            name_data = self.name_data
+
+        true_prevalences_all = []
+        emq_estimates_all = []
+        for i in range(self.n_validation):
+            X_tr, X_val, y_tr, y_val = train_test_split(
+                X_train, y_train, test_size=0.3, stratify=y_train
+            )
+            model_clf = pre_treined_model(X_tr, y_tr)
+            self.subgroups_train = UPP_protocol_mlquantify(X_val, y_val)
+
+            emq_estimates, true_prevalences = \
+                extract_emq_estimates_from_train(
+                    X_tr, y_tr, self.subgroups_train, model_clf=model_clf)
+
+            emq_estimates_all.extend(emq_estimates)
+            true_prevalences_all.extend(true_prevalences)
+
+        self.regressor.fit(emq_estimates_all, true_prevalences_all)
+        self.quantifier = EMQ(learner=self.learner)
+        self.quantifier.fit(X_train, y_train)
+        return self
+
+    def predict(self, X_test):
+        predict_quantifier = extract_estimates_from_test(
+            X_test, self.quantifier
+        )
+        prevalence = self.regressor.predict(predict_quantifier)
+        return prevalence.flatten()
+
+
+class QCal_rf_3_ac(AggregationMixin, BaseQuantifier):
+    '''
+    Quantifier calibration method.
+    - Random Forest regressor for correction
+    - Random Forest classifier for the quantifier
+    - AC estimates computed for each proportion
+    - n_validation = 3 (number of validations)
+    - UPP protocol for the generation of the subgroups in the training phase
+    '''
+    def __init__(self, learner, *, n_validation=3, name_data=None):
+        self.learner = learner
+        self.regressor = RandomForestRegressor()
+        self.quantifier = None
+        self.n_validation = n_validation
+        self.name_data = name_data
+        self.subgroups_train = None
+        self.subgroups_train_all = None
+
+    def fit(self, X_train, y_train, name_data=None):
+        if name_data is None:
+            name_data = self.name_data
+
+        true_prevalences_all = []
+        ac_estimates_all = []
+        for i in range(self.n_validation):
+            X_tr, X_val, y_tr, y_val = train_test_split(
+                X_train, y_train, test_size=0.3, stratify=y_train
+            )
+            model_clf = pre_treined_model(X_tr, y_tr)
+            self.subgroups_train = UPP_protocol_mlquantify(X_val, y_val)
+
+            ac_estimates, true_prevalences, _ = \
+                extract_ac_estimates_from_train(
+                    X_tr, y_tr, self.subgroups_train, model_clf=model_clf)
+
+            ac_estimates_all.extend(ac_estimates)
+            true_prevalences_all.extend(true_prevalences)
+
+        self.regressor.fit(ac_estimates_all, true_prevalences_all)
+        self.quantifier = AC(learner=self.learner)
+        self.quantifier.fit(X_train, y_train)
+        return self
+
+    def predict(self, X_test):
+        predict_quantifier = extract_estimates_from_test(
+            X_test, self.quantifier
+        )
+        prevalence = self.regressor.predict(predict_quantifier)
+        return prevalence.flatten()
+
+
+class QCal_rf_3_pac(AggregationMixin, BaseQuantifier):
+    '''
+    Quantifier calibration method.
+    - Random Forest regressor for correction
+    - Random Forest classifier for the quantifier
+    - PAC estimates computed for each proportion
+    - n_validation = 3 (number of validations)
+    - UPP protocol for the generation of the subgroups in the training phase
+    '''
+    def __init__(self, learner, *, n_validation=3, name_data=None):
+        self.learner = learner
+        self.regressor = RandomForestRegressor()
+        self.quantifier = None
+        self.n_validation = n_validation
+        self.name_data = name_data
+        self.subgroups_train = None
+        self.subgroups_train_all = None
+
+    def fit(self, X_train, y_train, name_data=None):
+        if name_data is None:
+            name_data = self.name_data
+
+        true_prevalences_all = []
+        pac_estimates_all = []
+        for i in range(self.n_validation):
+            X_tr, X_val, y_tr, y_val = train_test_split(
+                X_train, y_train, test_size=0.3, stratify=y_train
+            )
+            model_clf = pre_treined_model(X_tr, y_tr)
+            self.subgroups_train = UPP_protocol_mlquantify(X_val, y_val)
+
+            pac_estimates, true_prevalences, _ = \
+                extract_pac_estimates_from_train(
+                    X_tr, y_tr, self.subgroups_train, model_clf=model_clf)
+
+            pac_estimates_all.extend(pac_estimates)
+            true_prevalences_all.extend(true_prevalences)
+
+        self.regressor.fit(pac_estimates_all, true_prevalences_all)
+        self.quantifier = PAC(learner=self.learner)
+        self.quantifier.fit(X_train, y_train)
+        return self
+
+    def predict(self, X_test):
+        predict_quantifier = extract_estimates_from_test(
+            X_test, self.quantifier
+        )
+        prevalence = self.regressor.predict(predict_quantifier)
+        return prevalence.flatten()
+
+
+class QCal_rf_3_fm(AggregationMixin, BaseQuantifier):
+    '''
+    Quantifier calibration method.
+    - Random Forest regressor for correction
+    - Random Forest classifier for the quantifier
+    - FM estimates computed for each proportion
+    - n_validation = 3 (number of validations)
+    - UPP protocol for the generation of the subgroups in the training phase
+    '''
+    def __init__(self, learner, *, n_validation=3, name_data=None):
+        self.learner = learner
+        self.regressor = RandomForestRegressor()
+        self.quantifier = None
+        self.n_validation = n_validation
+        self.name_data = name_data
+        self.subgroups_train = None
+        self.subgroups_train_all = None
+
+    def fit(self, X_train, y_train, name_data=None):
+        if name_data is None:
+            name_data = self.name_data
+
+        true_prevalences_all = []
+        fm_estimates_all = []
+        for i in range(self.n_validation):
+            X_tr, X_val, y_tr, y_val = train_test_split(
+                X_train, y_train, test_size=0.3, stratify=y_train
+            )
+            model_clf = pre_treined_model(X_tr, y_tr)
+            self.subgroups_train = UPP_protocol_mlquantify(X_val, y_val)
+
+            fm_estimates, true_prevalences, _ = \
+                extract_fm_estimates_from_train(
+                    X_tr, y_tr, self.subgroups_train, model_clf=model_clf)
+
+            fm_estimates_all.extend(fm_estimates)
+            true_prevalences_all.extend(true_prevalences)
+
+        self.regressor.fit(fm_estimates_all, true_prevalences_all)
+        self.quantifier = FM(learner=self.learner)
+        self.quantifier.fit(X_train, y_train)
+        return self
+
+    def predict(self, X_test):
+        predict_quantifier = extract_estimates_from_test(
+            X_test, self.quantifier
+        )
+        prevalence = self.regressor.predict(predict_quantifier)
+        return prevalence.flatten()
+
+
+class QCal_rf_3_kdeyml(AggregationMixin, BaseQuantifier):
+    '''
+    Quantifier calibration method.
+    - Random Forest regressor for correction
+    - Random Forest classifier for the quantifier
+    - KDEyML estimates computed for each proportion
+    - n_validation = 3 (number of validations)
+    - UPP protocol for the generation of the subgroups in the training phase
+    '''
+    def __init__(self, learner, *, n_validation=3, name_data=None):
+        self.learner = learner
+        self.regressor = RandomForestRegressor()
+        self.quantifier = None
+        self.n_validation = n_validation
+        self.name_data = name_data
+        self.subgroups_train = None
+        self.subgroups_train_all = None
+
+    def fit(self, X_train, y_train, name_data=None):
+        if name_data is None:
+            name_data = self.name_data
+
+        true_prevalences_all = []
+        kdeyml_estimates_all = []
+        for i in range(self.n_validation):
+            X_tr, X_val, y_tr, y_val = train_test_split(
+                X_train, y_train, test_size=0.3, stratify=y_train
+            )
+            model_clf = pre_treined_model(X_tr, y_tr)
+            self.subgroups_train = UPP_protocol_mlquantify(X_val, y_val)
+
+            kdeyml_estimates, true_prevalences, _ = \
+                extract_kdeyml_estimates_from_train(
+                    X_tr, y_tr, self.subgroups_train, model_clf=model_clf)
+
+            kdeyml_estimates_all.extend(kdeyml_estimates)
+            true_prevalences_all.extend(true_prevalences)
+
+        self.regressor.fit(kdeyml_estimates_all, true_prevalences_all)
+        self.quantifier = KDEyML(classifier=self.learner, fit_classifier=True)
+        self.quantifier.fit(X_train, y_train)
+        return self
+
+    def predict(self, X_test):
+        predict_quantifier = extract_estimates_from_test(
+            X_test, self.quantifier
+        )
+        prevalence = self.regressor.predict(predict_quantifier)
+        return prevalence.flatten()
+
+
+class QCal_rf_3_dys(AggregationMixin, BaseQuantifier):
+    '''
+    Quantifier calibration method.
+    - Random Forest regressor for correction
+    - Random Forest classifier for the quantifier
+    - DyS estimates computed for each proportion
+    - n_validation = 3 (number of validations)
+    - UPP protocol for the generation of the subgroups in the training phase
+    '''
+    def __init__(self, learner, *, n_validation=3, name_data=None):
+        self.learner = learner
+        self.regressor = RandomForestRegressor()
+        self.quantifier = None
+        self.n_validation = n_validation
+        self.name_data = name_data
+        self.subgroups_train = None
+        self.subgroups_train_all = None
+
+    def fit(self, X_train, y_train, name_data=None):
+        if name_data is None:
+            name_data = self.name_data
+
+        true_prevalences_all = []
+        dys_estimates_all = []
+        for i in range(self.n_validation):
+            X_tr, X_val, y_tr, y_val = train_test_split(
+                X_train, y_train, test_size=0.3, stratify=y_train
+            )
+            model_clf = pre_treined_model(X_tr, y_tr)
+            self.subgroups_train = UPP_protocol_mlquantify(X_val, y_val)
+
+            dys_estimates, true_prevalences, _ = \
+                extract_dys_estimates_from_train(
+                    X_tr, y_tr, self.subgroups_train, model_clf=model_clf)
+
+            dys_estimates_all.extend(dys_estimates)
+            true_prevalences_all.extend(true_prevalences)
+
+        self.regressor.fit(dys_estimates_all, true_prevalences_all)
+        self.quantifier = DyS(learner=self.learner)
+        self.quantifier.fit(X_train, y_train)
+        return self
+
+    def predict(self, X_test):
+        predict_quantifier = extract_estimates_from_test(
+            X_test, self.quantifier
+        )
+        prevalence = self.regressor.predict(predict_quantifier)
+        return prevalence.flatten()
+
+
+class QCal_rf_3_ms(AggregationMixin, BaseQuantifier):
+    '''
+    Quantifier calibration method.
+    - Random Forest regressor for correction
+    - Random Forest classifier for the quantifier
+    - MS estimates computed for each proportion
+    - n_validation = 3 (number of validations)
+    - UPP protocol for the generation of the subgroups in the training phase
+    '''
+    def __init__(self, learner, *, n_validation=3, name_data=None):
+        self.learner = learner
+        self.regressor = RandomForestRegressor()
+        self.quantifier = None
+        self.n_validation = n_validation
+        self.name_data = name_data
+        self.subgroups_train = None
+        self.subgroups_train_all = None
+
+    def fit(self, X_train, y_train, name_data=None):
+        if name_data is None:
+            name_data = self.name_data
+
+        true_prevalences_all = []
+        ms_estimates_all = []
+        for i in range(self.n_validation):
+            X_tr, X_val, y_tr, y_val = train_test_split(
+                X_train, y_train, test_size=0.3, stratify=y_train
+            )
+            model_clf = pre_treined_model(X_tr, y_tr)
+            self.subgroups_train = UPP_protocol_mlquantify(X_val, y_val)
+
+            ms_estimates, true_prevalences, _ = \
+                extract_ms_estimates_from_train(
+                    X_tr, y_tr, self.subgroups_train, model_clf=model_clf)
+
+            ms_estimates_all.extend(ms_estimates)
+            true_prevalences_all.extend(true_prevalences)
+
+        self.regressor.fit(ms_estimates_all, true_prevalences_all)
+        self.quantifier = MS(learner=self.learner)
+        self.quantifier.fit(X_train, y_train)
+        return self
+
+    def predict(self, X_test):
+        predict_quantifier = extract_estimates_from_test(
+            X_test, self.quantifier
+        )
+        prevalence = self.regressor.predict(predict_quantifier)
         return prevalence.flatten()

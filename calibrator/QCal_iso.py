@@ -78,6 +78,10 @@ class QCal(AggregationMixin, BaseQuantifier):
     n_validation : int, default=3
         Number of validation splits (previously hard-coded as 3 or 10
         in separate classes).
+    n_prevalences : int or None, default=None
+        Number of prevalence points used by UPP_protocol_mlquantify to build
+        each validation split's subgroups. None keeps UPP's own default
+        (1100); set e.g. n_prevalences=100 to use fewer, coarser subgroups.
     method : str or None, default=None
         Calibration method forwarded to `pre_treined_model`'s `method`
         argument — one of 'BCTS', 'platt_scaling' or 'isotonic'. This is
@@ -144,7 +148,8 @@ class QCal(AggregationMixin, BaseQuantifier):
     }
 
     def __init__(self, learner=None, *, method_name='cc', clf=None, n_validation=3,
-                 name_data=None, method=None, calibrator=False, plot=False, plot_dir=None):
+                 n_prevalences=None, name_data=None, method=None, calibrator=False,
+                 plot=False, plot_dir=None):
         if method_name not in self._REGISTRY:
             raise ValueError(
                 f"method_name={method_name!r} unknown. "
@@ -154,6 +159,7 @@ class QCal(AggregationMixin, BaseQuantifier):
         self.method_name = method_name
         self.clf = clf
         self.n_validation = n_validation
+        self.n_prevalences = n_prevalences
         self.name_data = name_data
         self.method = method           # calibration method name forwarded to pre_treined_model (e.g. 'BCTS')
         self.calibrator = calibrator  # bool flag forwarded to pre_treined_model's `calibration` arg
@@ -213,8 +219,13 @@ class QCal(AggregationMixin, BaseQuantifier):
             X_tr, X_val, y_tr, y_val = train_test_split(
                 X_train, y_train, test_size=0.3, stratify=y_train
             )
-            # Generating subgroups
-            subgroups_train = UPP_protocol_mlquantify(X_val, y_val)
+            # Generating subgroups. `n_prevalences` is only forwarded when
+            # explicitly set: UPP_protocol_mlquantify's own default (1100) is
+            # int, but mlquantify's UPP rejects an explicit n_prevalences=None
+            # (raises ValueError), so self.n_prevalences staying at its own
+            # default of None must NOT be passed through.
+            upp_kwargs = {} if self.n_prevalences is None else {'n_prevalences': self.n_prevalences}
+            subgroups_train = UPP_protocol_mlquantify(X_val, y_val, **upp_kwargs)
 
             model_clf = None
             if uses_clf:
